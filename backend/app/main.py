@@ -599,7 +599,7 @@ async def set_gps_config(config: Dict[str, Any]):
     """Update GPS device config in SignalK settings and restart SignalK"""
     import json as _json
     signalk_settings = _HOME_DIR / ".signalk" / "settings.json"
-    if devmode.is_dev_mode() and not signalk_settings.exists():
+    if devmode.is_dev_mode():
         return {"status": "ok", "device": config.get("device", "/dev/ttyUSB0"),
                 "baudrate": int(config.get("baudrate", 4800)), "dev_mode": True}
     try:
@@ -5819,6 +5819,11 @@ async def _run_update(channel: str = "stable"):
     global _update_running, _update_log
     script = str(_BASE_DIR / "scripts" / "update.sh")
 
+    if devmode.is_dev_mode():
+        _update_log.append("[dev-mode] Update übersprungen (kein Download, kein update.sh)")
+        _update_running = False
+        return
+
     # update.sh immer von GitHub laden — stellt sicher dass immer die aktuelle Version läuft
     try:
         import urllib.request
@@ -6180,6 +6185,12 @@ async def shutdown_event():
     """Save known topics on shutdown"""
     save_known_topics()
     print("💾 Known topics saved on shutdown")
+
+if devmode.is_dev_mode():
+    # Dev mode: serve frontend/ from the API port so relative /api and /ws URLs resolve.
+    _FRONTEND_DIR = _BASE_DIR / "frontend"
+    if _FRONTEND_DIR.is_dir():
+        app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

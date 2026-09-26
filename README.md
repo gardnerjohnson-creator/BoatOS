@@ -422,7 +422,7 @@ Full documentation: `http://<pi-ip>:8000/docs`
 ### Local dev mode (no Raspberry Pi)
 
 ```bash
-tools/dev_run.sh --all     # venv + Mosquitto :1883 + backend :8000 + frontend :8080 + fake sensors/GPS
+tools/dev_run.sh --all     # venv + Mosquitto :1883 + backend & UI on :8000 + fake sensors/GPS
 ```
 
 Sets `BOATOS_DEV_MODE=1`, which turns all Pi/systemd-only commands into logged

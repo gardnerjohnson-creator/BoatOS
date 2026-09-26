@@ -47,8 +47,14 @@ def set_external_gps(lat, lon, speed=0.0, heading=0.0, accuracy=None):
     _external_gps_last_update = time.time()
 
 
+_mqtt_gps_last_update = 0.0
+_MQTT_GPS_TIMEOUT = 30.0  # seconds without MQTT position → fix lost
+
+
 def set_mqtt_gps(lat, lon, speed=None, heading=None, altitude=None, satellites=None):
     """Position from an MQTT GPS module (boat/gps/*); used when SignalK is disabled."""
+    global _mqtt_gps_last_update
+    _mqtt_gps_last_update = time.time()
     gps_data['lat'] = lat
     gps_data['lon'] = lon
     if speed is not None:
@@ -61,6 +67,15 @@ def set_mqtt_gps(lat, lon, speed=None, heading=None, altitude=None, satellites=N
         gps_data['satellites'] = int(satellites)
     gps_data['fix'] = True
     gps_data['timestamp'] = datetime.utcnow().isoformat()
+
+
+def _expire_stale_mqtt_fix():
+    """With SignalK disabled the MQTT feed is the only source; drop the fix when it goes quiet."""
+    if devmode.signalk_url() or not _mqtt_gps_last_update or is_external_gps_active():
+        return
+    if gps_data['fix'] and (time.time() - _mqtt_gps_last_update) > _MQTT_GPS_TIMEOUT:
+        gps_data['fix'] = False
+        gps_data['satellites'] = 0
 
 
 def clear_external_gps():
@@ -190,6 +205,7 @@ async def broadcast_gps_data():
     if not websocket_clients:
         return
 
+    _expire_stale_mqtt_fix()
     data = {
         'type': 'gps_update',
         'data': {
@@ -243,6 +259,7 @@ async def broadcast_route():
 
 def get_gps_status():
     """Get current GPS status"""
+    _expire_stale_mqtt_fix()
     return {
         'fix': gps_data['fix'],
         'satellites': gps_data['satellites'],

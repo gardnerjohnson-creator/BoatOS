@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 # BoatOS local development runner (no Raspberry Pi required).
 #
-#   tools/dev_run.sh            # backend :8000 + frontend :8080 (+ mosquitto :1883 if installed)
+#   tools/dev_run.sh            # backend + UI on :8000 (+ mosquitto :1883 if installed)
 #   tools/dev_run.sh --sensors  # additionally start tools/fake_sensors.py
 #   tools/dev_run.sh --gps      # additionally start tools/fake_gps_track.py
 #   tools/dev_run.sh --all      # both
 #
-# Environment overrides: BOATOS_DEV_PORT (8000), BOATOS_FRONTEND_PORT (8080),
-# BOATOS_MQTT_PORT (1883), BOATOS_SIGNALK_URL (default: disabled in dev).
+# Environment overrides: BOATOS_DEV_PORT (8000), BOATOS_MQTT_PORT (1883),
+# BOATOS_DEV_BIND (127.0.0.1; set 0.0.0.0 to test from another device),
+# BOATOS_SIGNALK_URL (default: disabled in dev).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="$ROOT/backend"
 VENV="$BACKEND/venv"
 API_PORT="${BOATOS_DEV_PORT:-8000}"
-FE_PORT="${BOATOS_FRONTEND_PORT:-8080}"
+BIND="${BOATOS_DEV_BIND:-127.0.0.1}"
 MQTT_PORT="${BOATOS_MQTT_PORT:-1883}"
 
 WITH_SENSORS=0
@@ -64,7 +65,7 @@ if command -v mosquitto >/dev/null 2>&1; then
   else
     echo "▶ starting mosquitto on :$MQTT_PORT"
     MQ_CONF="$(mktemp)"
-    printf 'listener %s 0.0.0.0\nallow_anonymous true\n' "$MQTT_PORT" > "$MQ_CONF"
+    printf 'listener %s %s\nallow_anonymous true\n' "$MQTT_PORT" "$BIND" > "$MQ_CONF"
     mosquitto -c "$MQ_CONF" -v >"$BACKEND/data/mosquitto-dev.log" 2>&1 &
     PIDS+=($!)
   fi
@@ -74,13 +75,11 @@ fi
 
 # --- Backend -------------------------------------------------------------
 echo "▶ starting backend on :$API_PORT (dev mode)"
-( cd "$BACKEND" && exec "$VENV/bin/uvicorn" --app-dir app main:app --host 0.0.0.0 --port "$API_PORT" --reload ) &
+( cd "$BACKEND" && exec "$VENV/bin/uvicorn" --app-dir app main:app --host "$BIND" --port "$API_PORT" --reload ) &
 PIDS+=($!)
 
-# --- Frontend (static) ---------------------------------------------------
-echo "▶ serving frontend on http://localhost:$FE_PORT"
-( cd "$ROOT/frontend" && exec python3 -m http.server "$FE_PORT" --bind 0.0.0.0 ) >/dev/null 2>&1 &
-PIDS+=($!)
+# Frontend: in dev mode the backend mounts frontend/ at "/" so that relative
+# /api and /ws URLs hit the same origin (no separate static server needed).
 
 sleep 2
 if [ "$WITH_SENSORS" = 1 ]; then
@@ -95,6 +94,6 @@ if [ "$WITH_GPS" = 1 ]; then
 fi
 
 echo
-echo "  BoatOS dev:  UI http://localhost:$FE_PORT   API http://localhost:$API_PORT/docs"
+echo "  BoatOS dev:  UI http://localhost:$API_PORT   API http://localhost:$API_PORT/docs"
 echo "  Ctrl+C stops everything."
 wait

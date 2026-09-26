@@ -21,11 +21,13 @@ This will:
 | `.env` | copies `.env.example` to `.env` if none exists |
 | Mosquitto | starts a broker on `:1883` (skipped with a warning if `mosquitto` is not installed) |
 | Backend | `uvicorn app.main:app --reload` on `:8000` with `BOATOS_DEV_MODE=1` |
-| Frontend | serves `frontend/` on `:8080` (`python3 -m http.server`) |
+| Frontend | in dev mode the backend mounts `frontend/` at `/`, so the UI is on `:8000` too (relative `/api` + `/ws` URLs work without a proxy) |
 | `--sensors` | runs `tools/fake_sensors.py` (MQTT engine/battery/tank/attitude/flow/bilge/GPS) |
 | `--gps` | runs `tools/fake_gps_track.py` (moving position via `POST /api/gps/external`) |
 
-Open http://localhost:8080 (UI) and http://localhost:8000/docs (API).
+Open http://localhost:8000 (UI) and http://localhost:8000/docs (API).
+Everything binds to `127.0.0.1`; set `BOATOS_DEV_BIND=0.0.0.0` to reach it from
+another device on your network (the dev stack has no authentication).
 `Ctrl+C` stops everything.
 
 Install Mosquitto with `sudo apt install mosquitto` (Debian/Ubuntu) or
@@ -41,6 +43,7 @@ All variables live in `.env` (see `.env.example`) or the process environment.
 | `BOATOS_SIGNALK_URL` | `http://localhost:3000` | SignalK server. Set to an **empty string** to disable SignalK polling entirely (GPS then comes from MQTT `boat/gps/*` or `POST /api/gps/external`). `tools/dev_run.sh` disables it unless you export a URL. |
 | `BOATOS_MQTT_HOST` | `localhost` | MQTT broker host used by the backend. |
 | `BOATOS_MQTT_PORT` | `1883` | MQTT broker port. |
+| `BOATOS_DEV_BIND` | `127.0.0.1` | Bind address used by `tools/dev_run.sh` for Mosquitto and uvicorn. |
 
 ## What dev mode changes
 
