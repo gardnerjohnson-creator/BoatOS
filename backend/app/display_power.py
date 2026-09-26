@@ -24,9 +24,10 @@ einen Auto-On-Trigger (Zündung/Zeitplan). Nur wenn der Touch separat versorgt
 bleibt, weckt Touch.
 """
 import json
-import subprocess
 import threading
 import time
+
+import devmode
 
 _SETTINGS = "data/settings.json"
 
@@ -51,8 +52,8 @@ def is_configured() -> bool:
 def _pin_level(pin: int):
     """True=high, False=low, None=unbekannt. `pinctrl get` gibt '… | hi/lo …'."""
     try:
-        out = subprocess.run(["pinctrl", "get", str(pin)],
-                             capture_output=True, text=True, timeout=3).stdout.lower()
+        out = devmode.run_system(["pinctrl", "get", str(pin)],
+                                 capture_output=True, text=True, timeout=3).stdout.lower()
     except Exception:
         return None
     if "| hi" in out:
@@ -80,8 +81,8 @@ def set_state(on: bool) -> bool:
         return False
     want_high = (bool(on) != active_low)  # active_low: an → Pin low
     try:
-        subprocess.run(["pinctrl", "set", str(pin), "op", "dh" if want_high else "dl"],
-                       check=True, timeout=3)
+        devmode.run_system(["pinctrl", "set", str(pin), "op", "dh" if want_high else "dl"],
+                           check=True, timeout=3)
         return True
     except Exception:
         return False
@@ -105,8 +106,8 @@ def start_wake_watcher():
     active_low = bool(d.get("wakeActiveLow", True))
     # Eingang mit Pull-up (Taster gegen GND) konfigurieren
     try:
-        subprocess.run(["pinctrl", "set", str(wpin), "ip", "pu" if active_low else "pd"],
-                       timeout=3)
+        devmode.run_system(["pinctrl", "set", str(wpin), "ip", "pu" if active_low else "pd"],
+                           timeout=3)
     except Exception:
         pass
 

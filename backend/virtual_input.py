@@ -3,9 +3,16 @@
 Virtual Input Handler für BoatOS Remote Control
 Erstellt ein virtuelles Touch-Device über uinput
 """
-import evdev
-from evdev import UInput, AbsInfo, ecodes
 import logging
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "app"))
+import devmode  # noqa: E402
+
+if not devmode.is_dev_mode():
+    import evdev  # noqa: F401
+    from evdev import UInput, AbsInfo, ecodes
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +27,9 @@ class VirtualTouchDevice:
     def __init__(self):
         """Initialisiert das virtuelle Touch-Device"""
         self.device = None
+        if devmode.is_dev_mode():
+            logger.info("[dev-mode] virtual touch device disabled (no uinput)")
+            return
         self._create_device()
 
     def _create_device(self):

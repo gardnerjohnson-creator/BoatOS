@@ -11,8 +11,13 @@ import logging
 import subprocess
 import base64
 import os
+import sys
 import tempfile
 from typing import Set
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "app"))
+import devmode  # noqa: E402
+
 from virtual_input import VirtualTouchDevice
 
 # Logging konfigurieren
@@ -43,6 +48,10 @@ async def capture_screenshot():
     if screenshot_cache and (current_time - screenshot_timestamp) < SCREENSHOT_CACHE_DURATION:
         logger.debug("Returning cached screenshot")
         return screenshot_cache
+
+    if devmode.is_dev_mode():
+        logger.debug("[dev-mode] screenshot capture skipped (no grim/Wayland)")
+        return None
 
     logger.info("Capturing new screenshot...")
     try:
@@ -245,7 +254,10 @@ async def main():
         # Virtuelles Touch-Device erstellen
         logger.info("Creating virtual touch device...")
         virtual_device = VirtualTouchDevice()
-        logger.info(f"Virtual device ready at: {virtual_device.device.device.path}")
+        if virtual_device.device is not None:
+            logger.info(f"Virtual device ready at: {virtual_device.device.device.path}")
+        else:
+            logger.info("Virtual device disabled (dev mode)")
 
         # WebSocket-Server starten
         host = "0.0.0.0"

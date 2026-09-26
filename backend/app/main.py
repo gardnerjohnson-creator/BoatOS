@@ -31,10 +31,14 @@ import seamark_buoys
 import dashboard_dsl
 import ienc
 import display_power
+import devmode
 
 # Load environment variables from .env file (one level up from backend/)
 dotenv_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
+
+if devmode.is_dev_mode():
+    print(f"🧪 BoatOS DEV MODE active: {devmode.describe()}")
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -593,8 +597,11 @@ async def get_sensors_list():
 @app.post("/api/gps/config")
 async def set_gps_config(config: Dict[str, Any]):
     """Update GPS device config in SignalK settings and restart SignalK"""
-    import subprocess, json as _json
+    import json as _json
     signalk_settings = _HOME_DIR / ".signalk" / "settings.json"
+    if devmode.is_dev_mode() and not signalk_settings.exists():
+        return {"status": "ok", "device": config.get("device", "/dev/ttyUSB0"),
+                "baudrate": int(config.get("baudrate", 4800)), "dev_mode": True}
     try:
         with open(signalk_settings, 'r') as f:
             sk = _json.load(f)
@@ -608,7 +615,7 @@ async def set_gps_config(config: Dict[str, Any]):
                         el["options"]["baudrate"] = baudrate
         with open(signalk_settings, 'w') as f:
             _json.dump(sk, f, indent=2)
-        subprocess.run(["sudo", "systemctl", "restart", "signalk.service"], check=True)
+        devmode.run_system(["sudo", "systemctl", "restart", "signalk.service"], check=True)
         return {"status": "ok", "device": device, "baudrate": baudrate}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -817,8 +824,8 @@ async def test_mqtt_connection(mqtt_config: Dict[str, Any]):
     try:
         import paho.mqtt.client as mqtt
 
-        host = mqtt_config.get('host', 'localhost')
-        port = mqtt_config.get('port', 1883)
+        host = mqtt_config.get('host', devmode.mqtt_host())
+        port = mqtt_config.get('port', devmode.mqtt_port())
         username = mqtt_config.get('username', '')
         password = mqtt_config.get('password', '')
 
@@ -870,7 +877,7 @@ async def mqtt_fix_external():
     conf_path = "/etc/mosquitto/conf.d/boatos.conf"
     conf_content = "listener 1883 0.0.0.0\nallow_anonymous true\n"
     try:
-        proc = await asyncio.create_subprocess_exec(
+        proc = await devmode.run_system_async(
             "sudo", "tee", conf_path,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.DEVNULL,
@@ -880,7 +887,7 @@ async def mqtt_fix_external():
         if proc.returncode != 0:
             return {"status": "error", "message": f"Config schreiben fehlgeschlagen: {stderr.decode().strip()}. Sudo-Berechtigung für 'tee {conf_path}' fehlt?"}
 
-        proc2 = await asyncio.create_subprocess_exec(
+        proc2 = await devmode.run_system_async(
             "sudo", "systemctl", "restart", "mosquitto",
             stderr=asyncio.subprocess.PIPE,
         )
@@ -3480,7 +3487,7 @@ def generate_gpx(track_data, timestamp):
 
 # ==================== SIGNALK ====================
 async def signalk_listener():
-    uri = "ws://localhost:3000/signalk/v1/stream?subscribe=all"
+    uri = f"{devmode.signalk_ws_url() or 'ws://localhost:3000'}/signalk/v1/stream?subscribe=all"
     while True:
         try:
             async with websockets.connect(uri) as ws:
@@ -3689,6 +3696,20 @@ def update_gps_from_module():
             sensor_data["gps"]["lat"] = lat
             sensor_data["gps"]["lon"] = lon
             print(f"📍 GPS: {lat:.6f}, {lon:.6f} ({gps_module_data.get('satellites', 0)} sats)")
+            # Without SignalK (BOATOS_SIGNALK_URL empty) the MQTT GPS module is
+            # the primary fix source → feed gps_service so /api/gps + WS clients see it.
+            if devmode.signalk_url() is None and not gps_service.is_external_gps_active():
+                gps_service.set_mqtt_gps(
+                    lat, lon,
+                    speed=gps_module_data.get("speed"),
+                    heading=gps_module_data.get("course"),
+                    altitude=gps_module_data.get("altitude"),
+                    satellites=gps_module_data.get("satellites"),
+                )
+                if _main_loop is not None:
+                    asyncio.run_coroutine_threadsafe(gps_service.broadcast_gps_data(), _main_loop)
+
+_main_loop: asyncio.AbstractEventLoop | None = None
 
 _mqtt_client: mqtt.Client | None = None
 
@@ -3716,7 +3737,7 @@ def mqtt_client_init():
                 c.on_connect = _on_mqtt_connect
                 c.on_disconnect = _on_mqtt_disconnect
                 c.reconnect_delay_set(min_delay=2, max_delay=30)
-                c.connect("localhost", 1883, 60)
+                c.connect(devmode.mqtt_host(), devmode.mqtt_port(), 60)
                 global _mqtt_client
                 _mqtt_client = c
                 c.loop_forever()        # blocks; returns on persistent disconnect
@@ -3736,7 +3757,7 @@ def mqtt_publisher_init():
     global mqtt_publisher_client
     try:
         mqtt_publisher_client = mqtt.Client(client_id="boatos_publisher")
-        mqtt_publisher_client.connect("localhost", 1883, 60)
+        mqtt_publisher_client.connect(devmode.mqtt_host(), devmode.mqtt_port(), 60)
         mqtt_publisher_client.loop_start()
         print("✅ MQTT Publisher connected for Home Assistant")
 
@@ -4580,7 +4601,7 @@ def _osrm_graphs() -> list:
 def _active_graph():
     """Aktiver Graph aus dem EFFEKTIVEN systemd-ExecStart (Drop-in inklusive)."""
     try:
-        r = subprocess.run(
+        r = devmode.run_system(
             ["systemctl", "show", "osrm", "--property=ExecStart", "--no-pager"],
             capture_output=True, text=True, timeout=5,
         )
@@ -4635,10 +4656,12 @@ def _apply_osrm_region(graph_id: str) -> dict:
         ["sudo", "systemctl", "restart", "osrm"],
     ]
     for cmd in steps:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        r = devmode.run_system(cmd, capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
             return {"success": False, "error": f"{' '.join(cmd[:3])}: {r.stderr.strip() or r.stdout.strip()}"}
 
+    if devmode.is_dev_mode():
+        return {"success": True, "dev_mode": True}
     if not _wait_osrm_up():
         return {"success": False, "error": "OSRM ist nach dem Neustart nicht erreichbar (Port 5000)"}
     return {"success": True}
@@ -5177,14 +5200,14 @@ async def toggle_onscreen_keyboard(action: str = "show"):
     try:
         if action == "show":
             # Check if onboard is already running
-            check = subprocess.run(
+            check = devmode.run_system(
                 ["pgrep", "-x", "onboard"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
 
             # Only start if not already running
-            if check.returncode != 0:
+            if check.returncode != 0 and not devmode.is_dev_mode():
                 # Show onboard keyboard with full X11 environment
                 env = os.environ.copy()
                 env['DISPLAY'] = ':0'
@@ -5201,7 +5224,7 @@ async def toggle_onscreen_keyboard(action: str = "show"):
             return {"status": "success", "action": "shown"}
         elif action == "hide":
             # Hide onboard keyboard
-            subprocess.run(
+            devmode.run_system(
                 ["pkill", "-9", "onboard"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
@@ -5220,13 +5243,13 @@ _WIFI_LOCK = "/tmp/boatos_wifi_connecting"
 def _run_nmcli(*args, use_sudo: bool = False, timeout: int = 30) -> subprocess.CompletedProcess:
     cmd = (["sudo"] if use_sudo else []) + ["nmcli", "--terse", "--colors", "no"] + list(args)
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return devmode.run_system(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(cmd, 1, "", f"nmcli timeout after {timeout}s")
 
 def _run_nmcli_fields(fields: str, *args) -> subprocess.CompletedProcess:
     """nmcli mit expliziten Feldern und ohne Escape-Zeichen (kein BSSID-Colon-Problem)"""
-    return subprocess.run(
+    return devmode.run_system(
         ["nmcli", "--fields", fields, "--escape", "no", "--terse", "--colors", "no"] + list(args),
         capture_output=True, text=True
     )
@@ -5362,7 +5385,7 @@ async def connect_wifi(request: Request):
     hotspot_was_active = False
     try:
         # Merken ob Hotspot vorher aktiv war (für Recovery bei Fehler)
-        hs_check = subprocess.run(
+        hs_check = devmode.run_system(
             ["nmcli", "-t", "-f", "NAME,STATE", "con", "show", "--active"],
             capture_output=True, text=True, timeout=5
         )
@@ -5381,7 +5404,7 @@ async def connect_wifi(request: Request):
             return {"status": "error", "message": "SSID fehlt"}
 
         # Detect WiFi interface
-        iface_res = subprocess.run(
+        iface_res = devmode.run_system(
             ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
             capture_output=True, text=True, timeout=5
         )
@@ -5421,7 +5444,7 @@ async def connect_wifi(request: Request):
             err = _parse_nmcli_error(result.stderr, result.stdout)
             # Verbindung fehlgeschlagen → Hotspot sofort neu starten wenn er vorher lief
             if hotspot_was_active:
-                subprocess.run(
+                devmode.run_system(
                     ["nmcli", "connection", "up", "BoatOS-Hotspot"],
                     capture_output=True, timeout=15
                 )
@@ -5429,7 +5452,7 @@ async def connect_wifi(request: Request):
     except Exception as e:
         if hotspot_was_active:
             try:
-                subprocess.run(
+                devmode.run_system(
                     ["nmcli", "connection", "up", "BoatOS-Hotspot"],
                     capture_output=True, timeout=15
                 )
@@ -5446,7 +5469,7 @@ async def connect_wifi(request: Request):
 async def get_hotspot_status():
     """Ob der Fallback-Hotspot gerade aktiv ist"""
     try:
-        res = subprocess.run(
+        res = devmode.run_system(
             ["nmcli", "-t", "-f", "NAME,STATE", "con", "show", "--active"],
             capture_output=True, text=True, timeout=5
         )
@@ -5461,7 +5484,7 @@ async def start_hotspot():
     """Hotspot manuell starten"""
     try:
         # Profil anlegen falls nicht vorhanden
-        iface_res = subprocess.run(
+        iface_res = devmode.run_system(
             ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
             capture_output=True, text=True, timeout=5
         )
@@ -5545,6 +5568,8 @@ async def _osrm_health_check_on_startup():
 # ==================== STARTUP ====================
 @app.on_event("startup")
 async def startup_event():
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
     # asyncio.create_task(signalk_listener())  # DISABLED: Duplicate GPS reader, gps_service handles this
     asyncio.create_task(track_recording_loop())
     asyncio.create_task(pegel_tracker_loop())
@@ -5614,7 +5639,7 @@ async def system_info():
     wifi_ssid = None
     wifi_ip = None
     try:
-        out = subprocess.check_output(
+        out = devmode.check_output_system(
             ["nmcli", "-t", "-f", "active,ssid,signal", "dev", "wifi"],
             stderr=subprocess.DEVNULL
         ).decode()
@@ -5651,13 +5676,13 @@ async def system_info():
 @app.post("/api/system/shutdown")
 async def system_shutdown():
     """Pi herunterfahren"""
-    asyncio.get_event_loop().call_later(1, lambda: subprocess.Popen(['sudo', 'shutdown', '-h', 'now']))
+    asyncio.get_event_loop().call_later(1, lambda: devmode.popen_system(['sudo', 'shutdown', '-h', 'now']))
     return {"status": "shutting_down"}
 
 @app.post("/api/system/reboot")
 async def system_reboot():
     """Pi neu starten"""
-    asyncio.get_event_loop().call_later(1, lambda: subprocess.Popen(['sudo', '/sbin/reboot']))
+    asyncio.get_event_loop().call_later(1, lambda: devmode.popen_system(['sudo', '/sbin/reboot']))
     return {"status": "rebooting"}
 
 
@@ -5812,7 +5837,7 @@ async def _run_update(channel: str = "stable"):
     try:
         # Kanal an update.sh durchreichen (Stable vs. Beta/Prerelease)
         env = {**os.environ, "BOATOS_CHANNEL": channel}
-        proc = await asyncio.create_subprocess_exec(
+        proc = await devmode.run_system_async(
             "bash", script,
             env=env,
             stdout=asyncio.subprocess.PIPE,
@@ -5994,8 +6019,8 @@ async def set_active_regions(body: dict):
     import time as _time
     _active_regions_cache_ts = _time.monotonic()
     try:
-        subprocess.Popen(["sudo", "/bin/systemctl", "restart", "tileserver"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        devmode.popen_system(["sudo", "/bin/systemctl", "restart", "tileserver"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
     # Fahrgebiete geändert (Region hinzugefügt/entfernt) → Tonnen im Hintergrund
@@ -6125,8 +6150,8 @@ async def helm_status():
     detected = Path("/run/boatos/has-display").exists()
     enabled  = not _HELM_DISABLED_FLAG.exists()
     try:
-        r = subprocess.run(["systemctl", "is-active", "lightdm"],
-                           capture_output=True, text=True)
+        r = devmode.run_system(["systemctl", "is-active", "lightdm"],
+                               capture_output=True, text=True)
         running = r.stdout.strip() == "active"
     except Exception:
         running = False
@@ -6140,14 +6165,14 @@ async def helm_set(body: dict):
         # Re-run detection so /run/boatos/has-display is (re-)created before
         # lightdm starts — necessary if Helm was disabled and rebooted, which
         # leaves the flag file absent and blocks the systemd condition.
-        subprocess.run(["sudo", "systemctl", "restart", "boatos-detect-display"],
-                       capture_output=True)
-        subprocess.Popen(["sudo", "systemctl", "start", "lightdm"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        devmode.run_system(["sudo", "systemctl", "restart", "boatos-detect-display"],
+                           capture_output=True)
+        devmode.popen_system(["sudo", "systemctl", "start", "lightdm"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         _HELM_DISABLED_FLAG.write_text("")
-        subprocess.Popen(["sudo", "systemctl", "stop", "lightdm"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        devmode.popen_system(["sudo", "systemctl", "stop", "lightdm"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return {"ok": True, "enabled": enabled}
 
 @app.on_event("shutdown")
