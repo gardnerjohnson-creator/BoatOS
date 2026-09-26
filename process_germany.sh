@@ -1,15 +1,19 @@
 #!/bin/bash
-# OSRM Germany Processing Script
-# Processes germany-latest.osm.pbf for waterway routing
+# OSRM Processing Script (legacy single-extract workflow)
+# Processes <region>-latest.osm.pbf for waterway routing.
+#   ./process_germany.sh            # germany-latest.osm.pbf
+#   ./process_germany.sh us-south   # us-south-latest.osm.pbf
+# For per-region graphs driven by backend/data/regions.json use scripts/extract_regions.sh.
 
 set -e  # Exit on error
 
-OSRM_DIR="/home/arielle/BoatOS/data/osrm"
-PROFILE="/home/arielle/BoatOS/data/osrm/motorboat.lua"
-INPUT_FILE="$OSRM_DIR/germany-latest.osm.pbf"
-BASE_NAME="$OSRM_DIR/germany-latest"
+REGION="${1:-germany}"
+OSRM_DIR="${OSRM_DIR:-$HOME/BoatOS/data/osrm}"
+PROFILE="${OSRM_PROFILE:-$OSRM_DIR/motorboat.lua}"
+INPUT_FILE="$OSRM_DIR/${REGION}-latest.osm.pbf"
+BASE_NAME="$OSRM_DIR/${REGION}-latest"
 
-echo "🇩🇪 Starting OSRM Germany processing..."
+echo "🚢 Starting OSRM processing for $REGION..."
 echo "📁 Input: $INPUT_FILE"
 echo "⚙️ Profile: $PROFILE"
 echo ""
@@ -20,7 +24,7 @@ if [ ! -f "$INPUT_FILE" ]; then
     exit 1
 fi
 
-# Check file size (should be ~3.6 GB)
+# Check file size (germany-latest is ~3.6 GB)
 FILE_SIZE=$(du -h "$INPUT_FILE" | cut -f1)
 echo "📊 File size: $FILE_SIZE"
 echo ""
@@ -69,7 +73,7 @@ echo "📦 Generated files:"
 ls -lh "$BASE_NAME".osrm* | awk '{print "   " $9 " - " $5}'
 echo ""
 
-echo "🎉 OSRM Germany processing complete!"
+echo "🎉 OSRM processing for $REGION complete!"
 echo ""
 echo "📝 Next steps:"
 echo "   1. Open BoatOS Settings → Routing"

@@ -413,6 +413,8 @@ Full documentation: `http://<pi-ip>:8000/docs`
 | `POST /api/logbook/stop` | End trip |
 | `GET /api/crew` | Crew members |
 | `GET /api/settings` | System settings |
+| `GET /api/region` | Active region profile (basemap, units, providers) — see [docs/regions.md](docs/regions.md) |
+| `POST /api/region` | Switch profile / override fields |
 | `GET /api/saved-routes` | Saved routes |
 
 ---

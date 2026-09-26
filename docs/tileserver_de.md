@@ -147,6 +147,8 @@ Die Datei in `~/BoatOS/data/` ablegen — sie erscheint automatisch in den Karte
 
 ## Mehrere Regionen / länderübergreifende Navigation
 
+> Region-IDs, Geofabrik-Pfade und die Standard-Basiskarte je Fahrtgebiet stehen in `backend/data/regions.json` — siehe [regions_de.md](regions_de.md).
+
 BoatOS kann mehrere `.mbtiles`-Dateien gleichzeitig nutzen. Der Backend-Tile-Proxy fragt beim Laden jeder Kachel alle aktiven Regionen der Reihe nach ab und gibt die erste gefundene zurück — geografisch nicht überlappende Regionen funktionieren damit nahtlos.
 
 ### Regionen aktivieren (UI)

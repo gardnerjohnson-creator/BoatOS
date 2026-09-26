@@ -414,6 +414,8 @@ Vollständige Dokumentation: `http://<pi-ip>:8000/docs`
 | `POST /api/logbook/stop` | Fahrt beenden |
 | `GET /api/crew` | Crew-Mitglieder |
 | `GET /api/settings` | Systemeinstellungen |
+| `GET /api/region` | Aktives Regionsprofil (Basiskarte, Einheiten, Anbieter) — siehe [docs/regions_de.md](docs/regions_de.md) |
+| `POST /api/region` | Profil wechseln / Felder überschreiben |
 | `GET /api/saved-routes` | Gespeicherte Routen |
 
 ---

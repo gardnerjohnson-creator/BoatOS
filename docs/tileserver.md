@@ -147,6 +147,8 @@ Place the file in `~/BoatOS/data/` — it will appear automatically in the map s
 
 ## Multiple regions / cross-border navigation
 
+> Region ids, Geofabrik paths and the default basemap per cruising area live in `backend/data/regions.json` — see [regions.md](regions.md).
+
 BoatOS can use several `.mbtiles` files simultaneously. The backend tile proxy queries all active regions in order for each tile request and returns the first match — geographically non-overlapping regions work seamlessly.
 
 ### Activating regions (UI)
