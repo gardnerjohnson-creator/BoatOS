@@ -16,6 +16,7 @@ takes the "no S57_PROFILE" branch on both).
 | Geofabrik US extracts | yes — `us-northeast` 1.8 GB, `us-south` 4.1 GB, `north-america` 19.4 GB, per-state e.g. `us/maryland` 214 MB, `us/florida` 657 MB; `central-america/bahamas` 14 MB | **yes** — `osrm-extract` with `waterway_balanced_v2.lua` accepted `maryland-latest.osm.pbf` unchanged; partition/customize/routed OK | profile routes only `waterway=*` ways → **no routes across open bays/coastal water** (Chesapeake Bay Annapolis→Baltimore = `NoRoute`); `extract_regions.sh` hard-codes `europe/germany/` | download script: trivial; open-water routing is a real feature gap (grid/visibility graph or `seamark`/`route=ferry` based) — out of scope for a config port |
 | NWS api.weather.gov | yes — free, no key, needs `User-Agent` | **mostly** — alerts are CAP/GeoJSON with the same field names Bright Sky/DWD deliver (`event, headline, description, instruction, severity, urgency, onset, effective, expires, category`) | 2-step lookup (`/points` → gridpoint); imperial units in `/forecast`, mixed in `/gridpoints`; marine alerts (Small Craft Advisory) only appear when querying a marine zone / offshore point; no `location.name` (use `areaDesc`/`senderName`) | alerts: ~50 lines (new `fetch_nws_alerts()` + `alertSource="nws"`); forecast optional — OpenWeather already works in the US |
 | NOAA CO-OPS (tidesandcurrents) | yes — free, no key | **yes** — JSON, 6-min observations + harmonic predictions; metric units on request | different station model (metadata API + per-station data calls vs. PEGELONLINE's single `stations.json` with current values); values are metres above MLLW (not cm); no `MNW`/`charValue`; **no flow velocity** at water-level stations (86 separate current stations, none returned for FL) | ~1 session: `NoaaCoops` class mirroring `PegelOnline.get_tide()` / `nearest_station()`; can improve on the MVP by using real hi/lo predictions |
+| Environmental: depth / current / waves (see §6) | yes — depth from ENC; currents from CO-OPS (real-time + predictions); wave height & period from NWS gridpoints (forecast) and NDBC buoys (observations) | **yes** — JSON (CO-OPS, NWS) and fixed-column text (NDBC), all metric | no equivalent exists in the DWD/PEGELONLINE stack today, so these are new UI/data fields, not adaptations; CO-OPS current stations are sparse (86 real-time, 4 430 prediction); NWS wave fields are empty on inland grid cells | ~1 session: `currents`/`currents_predictions` in the CO-OPS provider, `waveHeight`/`wavePeriod` parsing from the NWS gridpoint, NDBC text parser |
 | Bahamas OSM / OpenSeaMap | yes — Geofabrik `bahamas` extract, OpenSeaMap tiles serve | partial | OSM: 502 seamark objects for the whole country (14 lateral buoys, 14 lateral beacons, 22 lights), 8 161 coastline ways, 494 `natural=reef`; OpenSeaMap tiles are near-empty (1–3 kB PNGs at z12 vs. 12 kB Hamburg). **NOAA ENCs do not cover Bahamas waters** except the Bimini/Cat Cay approach cell `US4FL2AL` and small-scale overview cells (`US2ATLMB` 1:700k, `US1GLBCF` 1:3.5M) | none in code — the existing generic MBTiles / KAP upload is the fallback; CO-OPS does provide **tide predictions for 26 Bahamas/Cuba stations** (e.g. `TEC4617` North Bimini, `TEC4623` Nassau, `9710441` Settlement Point) |
 
 Verdict: every source is reachable and no format blocks the port. NOAA ENC
@@ -346,8 +347,32 @@ methods (`fetch_gauges`, `get_reference_levels`, `nearest_station`,
 3. `weather_alerts.py`: `fetch_nws_alerts()`; keep OpenWeather for forecast.
 4. `extract_regions.sh` / `docs/osrm.md`: region table with Geofabrik paths
    for US states + Bahamas.
-5. Separate track: open-water routing (visibility graph over `LNDARE`/`DEPARE`
-   or a coarse grid), since OSRM+`waterway=*` cannot route across bays.
+5. **Open-water routing workstream (confirmed in scope):** visibility graph or
+   coarse grid over `LNDARE`/`DEPARE`/`OBSTRN` from the imported ENC cells,
+   with the vessel draft check reusing `check_route()`; OSRM stays for ICW /
+   river / canal legs and the two are stitched at the fairway entrance.
+6. Environmental layer (§6): currents + wave height/period alongside the
+   existing tide/weather panels.
+
+---
+
+## 6. Depth, current, wave height, wave period
+
+| Quantity | Source | Tested call | Shape | Notes |
+|---|---|---|---|---|
+| Depth | NOAA ENC `DEPARE`/`DEPCNT`/`SOUNDG` | §1 | already consumed by `depth_at_point()` / `check_route()` | MLLW datum; add CO-OPS `water_level` as offset |
+| Current (observed) | CO-OPS `product=currents` | `station=mi0101` (Miami LB M), `date=latest`, `units=metric` | `{"metadata":{id,name,lat,lon},"data":[{"t":"2026-09-26 15:45","s":"34.0","d":"156","b":"4"}]}` — `s` speed cm/s, `d` direction °T, `b` bin | 86 real-time current stations nationally (`mdapi …/stations.json?type=currents`); 5 around Miami / Port Everglades, none inside Biscayne Bay |
+| Current (predicted) | CO-OPS `product=currents_predictions` | `station=ACT8141` (Bakers Haulover Cut), `interval=MAX_SLACK` | `{"current_predictions":{"units":"meters, cm/s","cp":[{Type: slack\|flood\|ebb, Time, Velocity_Major (signed cm/s), meanFloodDir, meanEbbDir, Bin, Depth}]}}` | 4 430 prediction stations (`type=currentpredictions`), incl. Fort Lauderdale New River, Fowey Rocks, Caesar Creek. Different ID scheme from tide stations |
+| Wave height / period (forecast) | NWS `/gridpoints/{wfo}/{x},{y}` | `MFL/122,49` (25.7, −79.9 offshore Miami) | `properties.waveHeight {uom:"wmoUnit:m", values:[{validTime:"…/PT10H", value:2.13}]}`, `wavePeriod {uom:"nwsUnit:s", values:[{…, value:9}]}`, plus `primarySwellHeight`, `primarySwellDirection` | Land-adjacent cells (`MFL/110,50`, downtown Miami) carry `waveHeight=0` / `wavePeriod=1–2 s` — must sample an offshore/marine-zone point; `waveDirection` and `windWaveHeight` were empty on both cells. ISO-8601 duration `validTime` needs expansion |
+| Wave height / period (observed) | NDBC `data/realtime2/{station}.txt` | `41114` (Fort Pierce), `41009` (Canaveral) | fixed-width text, header row `WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP …`, units row `m/s m sec sec degT hPa degC`; `MM` = missing | `WVHT` significant wave height (m), `DPD` dominant period (s), `APD` average period (s), `MWD` mean direction. 1 942 stations in `station_table.txt`. No JSON; parser is ~30 lines. Many buoys report only a subset (41009 had wind/pressure, no waves at test time) |
+
+All four quantities are available without credentials. None have a
+counterpart in the current DWD/PEGELONLINE integration (PEGELONLINE `VA`
+flow velocity is the closest, and it is scalar only), so this is additive
+UI/data work rather than adaptation. Bahamas: no CO-OPS current stations,
+no NDBC buoys; NWS gridpoints stop at the US marine-zone boundary, so only
+global wave models (e.g. NOAA WaveWatch III GRIB, not tested here) would
+cover Bahamas waters.
 
 ## Reproduction
 
