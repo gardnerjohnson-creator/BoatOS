@@ -1,5 +1,7 @@
 #!/bin/bash
-# Script to extract additional German Bundesländer for OSRM waterway routing
+# Extract Geofabrik regions for OSRM waterway routing.
+# Regions come from backend/data/regions.json (id + geofabrik path); any other
+# Geofabrik path (e.g. north-america/us/florida) can be passed directly.
 set -e
 
 echo "🚢 OSRM Waterway Region Extractor"
@@ -22,14 +24,30 @@ if [ ! -f "$OSRM_BACKEND/profiles/waterway.lua" ]; then
     exit 1
 fi
 
-# Available German regions
-REGIONS=(
-    "baden-wuerttemberg" "bayern" "berlin" "brandenburg"
-    "bremen" "hamburg" "hessen" "mecklenburg-vorpommern"
-    "niedersachsen" "nordrhein-westfalen" "rheinland-pfalz"
-    "saarland" "sachsen" "sachsen-anhalt"
-    "schleswig-holstein" "thueringen"
+# Regions from the registry (id<TAB>geofabrik-path), profile filter optional
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REGISTRY="${BOATOS_REGIONS_JSON:-$SCRIPT_DIR/../backend/data/regions.json}"
+REGION_PROFILE="${BOATOS_REGION_PROFILE:-}"
+REGIONS=()
+declare -A GEOFABRIK
+while IFS=$'\t' read -r rid rpath; do
+    REGIONS+=("$rid"); GEOFABRIK["$rid"]="$rpath"
+done < <(python3 - "$REGISTRY" "$REGION_PROFILE" <<'PY'
+import json, sys
+reg = json.load(open(sys.argv[1]))
+prof = sys.argv[2]
+for r in reg["regions"]:
+    if prof and r.get("profile") != prof:
+        continue
+    print(f"{r['id']}\t{r['geofabrik']}")
+PY
 )
+
+# Resolve a region id (or raw Geofabrik path) to its download URL
+geofabrik_url() {
+    local path="${GEOFABRIK[$1]:-$1}"
+    echo "https://download.geofabrik.de/${path}-latest.osm.pbf"
+}
 
 # Show menu if no argument provided
 if [ $# -eq 0 ]; then
@@ -39,9 +57,9 @@ if [ $# -eq 0 ]; then
         printf "  %2d) %s\n" $((i+1)) "${REGIONS[$i]}"
     done
     echo ""
-    echo "  all) Alle Bundesländer extrahieren"
+    echo "  all) alle Regionen extrahieren (Filter: BOATOS_REGION_PROFILE=de|us-east|bahamas)"
     echo ""
-    read -p "Region auswählen (Nummer, Name oder 'all'): " selection
+    read -p "Region auswählen (Nummer, ID, Geofabrik-Pfad oder 'all'): " selection
 
     if [ "$selection" = "all" ]; then
         SELECTED_REGIONS=("${REGIONS[@]}")
@@ -66,13 +84,14 @@ echo ""
 echo "Extracting ${#SELECTED_REGIONS[@]} region(s)..."
 echo ""
 
-for REGION in "${SELECTED_REGIONS[@]}"; do
-    echo "=== Processing: $REGION ==="
+for SEL in "${SELECTED_REGIONS[@]}"; do
+    REGION="$(basename "$SEL")"
+    echo "=== Processing: $REGION ($(geofabrik_url "$SEL")) ==="
 
     # Download if not exists
     if [ ! -f "${REGION}-latest.osm.pbf" ]; then
         echo "  [1/4] Downloading OSM data..."
-        wget -q --show-progress "https://download.geofabrik.de/europe/germany/${REGION}-latest.osm.pbf"
+        wget -q --show-progress -O "${REGION}-latest.osm.pbf" "$(geofabrik_url "$SEL")"
     else
         echo "  [1/4] OSM data already downloaded"
     fi

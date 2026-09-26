@@ -32,12 +32,50 @@ export const WS_URL = window.location.hostname === 'localhost'
  * @type {Object}
  */
 export const MAP_CONFIG = {
-    // Default-Position: Aken an der Elbe
+    // Default-Position: Aken an der Elbe (overridden by REGION_CONFIG.defaultCenter)
     defaultCenter: { lat: 51.855, lon: 12.046 },
     defaultZoom: 13,
     minZoom: 4,
     maxZoom: 19
 };
+
+/**
+ * Region/locale config from GET /api/region (backend/data/regions.json profile +
+ * settings.region overrides). Values below are the "de" profile fallbacks used
+ * until loadRegionConfig() resolves or when the backend is unreachable.
+ * @type {Object}
+ */
+export const REGION_CONFIG = {
+    profile: 'de',
+    language: 'de',
+    units: 'metric',
+    defaultBasemap: 'germany',
+    defaultCenter: { lat: 51.855, lon: 12.046 },
+    defaultZoom: 13,
+    tideProvider: 'pegelonline',
+    weatherProvider: 'openweather',
+    alertProvider: 'dwd',
+    chartSource: 'elwis'
+};
+
+/**
+ * Lädt die Region-Konfiguration vom Backend und aktualisiert REGION_CONFIG/MAP_CONFIG in place.
+ * @returns {Promise<Object>} REGION_CONFIG
+ */
+export async function loadRegionConfig() {
+    try {
+        const r = await fetch(`${API_URL}/api/region`, { cache: 'no-store' });
+        if (r.ok) {
+            Object.assign(REGION_CONFIG, await r.json());
+            if (REGION_CONFIG.defaultCenter) MAP_CONFIG.defaultCenter = REGION_CONFIG.defaultCenter;
+            if (REGION_CONFIG.defaultZoom) MAP_CONFIG.defaultZoom = REGION_CONFIG.defaultZoom;
+        }
+    } catch (e) {
+        console.warn('Region config not available, using defaults:', e.message);
+    }
+    window.BOATOS_REGION = REGION_CONFIG;
+    return REGION_CONFIG;
+}
 
 /**
  * GPS-Einstellungen

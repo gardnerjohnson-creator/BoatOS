@@ -5,7 +5,7 @@ from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 import asyncio, json, websockets, os, shutil, zipfile, subprocess, re, time, sqlite3 as _sqlite3, gzip as _gzip
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import paho.mqtt.client as mqtt
 from math import radians, sin, cos, sqrt, atan2
 import aiohttp
@@ -32,6 +32,7 @@ import dashboard_dsl
 import ienc
 import display_power
 import devmode
+import regions as region_registry
 
 # Load environment variables from .env file (one level up from backend/)
 dotenv_path = Path(__file__).resolve().parent.parent.parent / ".env"
@@ -759,6 +760,28 @@ async def save_settings(settings: Dict[str, Any]):
         return {"status": "success", "message": "Settings saved"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ==================== REGION / LOCALE ====================
+@app.get("/api/regions")
+async def get_region_registry(profile: Optional[str] = None):
+    """Region registry (Geofabrik extracts + locale profiles) from data/regions.json."""
+    reg = region_registry.registry()
+    return {"profiles": reg["profiles"], "regions": region_registry.list_regions(profile)}
+
+@app.get("/api/region")
+async def get_region_config():
+    """Effective locale config: profile defaults overlaid with settings.region."""
+    return region_registry.effective_locale()
+
+@app.post("/api/region")
+async def set_region_config(update: Dict[str, Any]):
+    """Merge into settings.region (e.g. {"profile": "us-east"} or {"units": "imperial"})."""
+    global _active_regions_cache
+    profile = update.get("profile")
+    if profile and profile not in region_registry.registry()["profiles"]:
+        raise HTTPException(status_code=400, detail=f"unknown profile '{profile}'")
+    _active_regions_cache = None
+    return region_registry.save_region_settings(update)
 
 # ==================== DASHBOARD LAYOUT ====================
 @app.get("/api/dashboard/layout")
@@ -4561,27 +4584,6 @@ _OSRM_DROPIN = f"{_OSRM_DROPIN_DIR}/boatos-region.conf"
 _OSRM_BIN = "/usr/local/bin/osrm-routed"
 _OSRM_PORT = 5000
 
-_REGION_NAMES = {
-    "baden-wuerttemberg": "Baden-Württemberg",
-    "bayern": "Bayern",
-    "berlin": "Berlin",
-    "brandenburg": "Brandenburg",
-    "bremen": "Bremen",
-    "hamburg": "Hamburg",
-    "hessen": "Hessen",
-    "mecklenburg-vorpommern": "Mecklenburg-Vorpommern",
-    "niedersachsen": "Niedersachsen",
-    "nordrhein-westfalen": "Nordrhein-Westfalen",
-    "rheinland-pfalz": "Rheinland-Pfalz",
-    "saarland": "Saarland",
-    "sachsen": "Sachsen",
-    "sachsen-anhalt": "Sachsen-Anhalt",
-    "schleswig-holstein": "Schleswig-Holstein",
-    "thueringen": "Thüringen",
-    "germany": "Deutschland (komplett)",
-    "germany-waterways": "Deutschland (Wasserstraßen)",
-    "elbe": "Elbe (Sachsen-Anhalt + Brandenburg + Sachsen)",
-}
 
 
 def _osrm_graphs() -> list:
@@ -4596,7 +4598,7 @@ def _osrm_graphs() -> list:
             size = 0
         graphs.append({
             "id": base,
-            "name": _REGION_NAMES.get(short, short.replace("-", " ").title()),
+            "name": region_registry.region_name(short),
             "size_mb": round(size / (1024 * 1024)),
         })
     return graphs
@@ -4688,7 +4690,7 @@ async def get_current_region():
     short = active[: -len("-latest")] if active and active.endswith("-latest") else active
     return {
         "region": active,
-        "name": _REGION_NAMES.get(short, short.replace("-", " ").title()) if short else None,
+        "name": region_registry.region_name(short) if short else None,
         "running": _wait_osrm_up(timeout=1.5) if active else False,
     }
 
@@ -5895,7 +5897,8 @@ def _get_active_regions() -> list:
     except Exception:
         pass
     installed = sorted(p.stem for p in MBTILES_DIR.glob("*.mbtiles"))
-    result = ["germany"] if "germany" in installed else (installed[:1] if installed else [])
+    default = region_registry.default_basemap()
+    result = [default] if default in installed else (installed[:1] if installed else [])
     _active_regions_cache = result
     _active_regions_cache_ts = now
     return result
@@ -5975,7 +5978,7 @@ async def map_regions():
         base = p.stem[:-len("-seamarks")] if is_seamark else p.stem
         installed.append({
             "id": p.stem,
-            "name": p.stem.replace("-", " ").replace("_", " ").title(),
+            "name": region_registry.region_name(base) + (" (seamarks)" if is_seamark else ""),
             "size_mb": size_mb,
             "active": base in active if is_seamark else p.stem in active,
             "is_seamark": is_seamark,

@@ -19,6 +19,7 @@
 // wie API_URL, currentPosition, etc.
 import { addIENCLayers, toggleIENCLayer, isIENCVisible } from './ienc.js';
 import { addSeamarkBuoys } from './seamark_buoys.js';
+import { REGION_CONFIG, MAP_CONFIG } from './core.js';
 
 // Re-Export: macht die IENC-Funktionen unter BoatOS.map.* verfügbar (ui.js)
 export { toggleIENCLayer, isIENCVisible };
@@ -310,7 +311,7 @@ async function _checkTileserver() {
         clearTimeout(timer);
         if (!r.ok) return null;
         const data = await r.json();
-        return (data.ok === true) ? (data.active || ['germany']) : null;
+        return (data.ok === true) ? (data.active || [REGION_CONFIG.defaultBasemap]) : null;
     } catch {
         clearTimeout(timer);
         return null;
@@ -607,8 +608,8 @@ export async function initMap(options = {}) {
     const rect = mapContainer.getBoundingClientRect();
     console.log(`Container Groesse: ${rect.width}x${rect.height}`);
 
-    // Standard-Position (Aken/Elbe)
-    const defaultPosition = options.center || { lat: 51.855, lon: 12.046 };
+    // Standard-Position aus Region-Profil (REGION_CONFIG.defaultCenter)
+    const defaultPosition = options.center || MAP_CONFIG.defaultCenter;
 
     // Tileserver-Verfügbarkeit prüfen, ggf. Online-Fallback nutzen
     const regions = await _checkTileserver();
@@ -621,7 +622,7 @@ export async function initMap(options = {}) {
         container: 'map',
         style: tileserverOk ? _vectorStyle(regions) : _rasterFallbackStyle(),
         center: [defaultPosition.lon, defaultPosition.lat],
-        zoom: options.zoom || 13,
+        zoom: options.zoom || MAP_CONFIG.defaultZoom,
         // MapLibre deckelt den Pitch per Default bei 60° und kappt hoehere Werte
         // STILL — ein pitch:70 waere wirkungslos "angekommen". Fuer die flache
         // Look-ahead-Perspektive das Limit anheben.
@@ -817,7 +818,7 @@ export function addLabelsLayer() {
     try {
         map.setGlyphs('https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf');
 
-        const regions = _activeRegions || ['germany'];
+        const regions = _activeRegions || [REGION_CONFIG.defaultBasemap];
         const labelDefs = [
             { id: 'place-city',     'source-layer': 'place',    filter: ['==', ['get', 'class'], 'city'],    minzoom: 5,  layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Bold'],    'text-size': 16 }, paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 2   } },
             { id: 'place-town',     'source-layer': 'place',    filter: ['==', ['get', 'class'], 'town'],    minzoom: 8,  layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 13 }, paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } },
@@ -1017,7 +1018,7 @@ function initMapMarkers() {
     boatMarkerElement = el;
 
     // Aktuelle Position aus globalem State
-    const currentPos = window.currentPosition || { lat: 51.855, lon: 12.046 };
+    const currentPos = window.currentPosition || MAP_CONFIG.defaultCenter;
 
     boatMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat([currentPos.lon, currentPos.lat])
@@ -1464,7 +1465,7 @@ export function setLayerOpacity(layerId, opacity) {
  * Zentriert die Karte auf das Boot
  */
 export function centerOnBoat() {
-    const currentPos = window.currentPosition || { lat: 51.855, lon: 12.046 };
+    const currentPos = window.currentPosition || MAP_CONFIG.defaultCenter;
     autoFollow = true;
     updateFollowButton(true);
 
@@ -1676,8 +1677,8 @@ function _setupBoat3dMarker() {
     window.addEventListener('resize', _applyBoat3dSize);
     map.on('zoom', _applyBoat3dSize);   // mit dem Zoom mitskalieren (klebt am Wasser)
     const ll = (boatMarker && boatMarker.getLngLat) ? boatMarker.getLngLat() : null;
-    const lon = ll ? ll.lng : (window.currentPosition?.lon ?? 12.046);
-    const lat = ll ? ll.lat : (window.currentPosition?.lat ?? 51.855);
+    const lon = ll ? ll.lng : (window.currentPosition?.lon ?? MAP_CONFIG.defaultCenter.lon);
+    const lat = ll ? ll.lat : (window.currentPosition?.lat ?? MAP_CONFIG.defaultCenter.lat);
     boat3dMarker = new maplibregl.Marker({
         element: boat3dEl, anchor: 'center',
         pitchAlignment: 'map', rotationAlignment: 'map',

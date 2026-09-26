@@ -837,10 +837,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Karte initialisieren (async — lädt maplibre-gl.js + prüft Tileserver)
     // Dashboard und Wetter laufen parallel dazu im Hintergrund
+    // Region-/Locale-Profil (Default-Position, Basemap, Provider) vor der Karte laden
+    const region = await core.loadRegionConfig();
     const mapInstance = await mapModule.initMap({
         container: 'map',
-        center: { lat: 51.855, lon: 12.046 },
-        zoom: 13
+        center: region.defaultCenter,
+        zoom: region.defaultZoom
     });
 
     // Warten bis Karte geladen ist

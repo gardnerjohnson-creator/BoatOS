@@ -9,6 +9,21 @@ export const id = 'map';
 
 export const html = `
                 <div class="setting-group">
+                    <h4 data-i18n="settings_region_profile">Region &amp; Fahrtgebiet</h4>
+                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;" data-i18n="settings_region_profile_desc">
+                        Legt Standard-Position, Basiskarte, Einheiten und Datenanbieter (Pegel, Wetter, Karten) fest.
+                    </p>
+                    <div class="setting-item">
+                        <span data-i18n="settings_region_profile_label">Profil</span>
+                        <select id="region-profile-select" class="setting-select"
+                                onchange="BoatOS.ui.setRegionProfile(this.value)">
+                            <option value="de">Germany / Central Europe</option>
+                        </select>
+                    </div>
+                    <div id="region-profile-summary" style="font-size:11px;color:var(--text-dim);margin-top:4px;"></div>
+                </div>
+
+                <div class="setting-group">
                     <h4 data-i18n="settings_map_layers">Kartenlayer</h4>
                     <div class="setting-item">
                         <span>OpenSeaMap</span>
@@ -140,4 +155,5 @@ export function collect(settings) {
 
 export function onShow(ctx) {
     if (window.loadMapRegions) window.loadMapRegions();
+    if (window.loadRegionProfile) window.loadRegionProfile();
 }

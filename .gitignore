@@ -21,6 +21,7 @@ data/*
 backend/data/*
 !backend/data/.gitkeep
 !backend/data/dashboard_templates.json
+!backend/data/regions.json
 
 # Routing engines (zu groß)
 brouter/

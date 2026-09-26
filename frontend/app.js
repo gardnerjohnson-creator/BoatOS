@@ -23,7 +23,9 @@ let waypoints = [];
 let waypointMarkers = []; // Array of MapLibre marker objects
 let trackHistory = []; // Array of {lat, lon, timestamp}
 let maxTrackPoints = 500; // Maximum track points to keep
-let currentPosition = { lat: 51.855, lon: 12.046 }; // Default: Aken/Elbe
+// Basemap source name / default position — override via window.BOATOS_BASEMAP / window.BOATOS_REGION
+const BASEMAP = window.BOATOS_BASEMAP || (window.BOATOS_REGION && window.BOATOS_REGION.defaultBasemap) || 'germany';
+let currentPosition = (window.BOATOS_REGION && window.BOATOS_REGION.defaultCenter) || { lat: 51.855, lon: 12.046 }; // Default: Aken/Elbe
 
 // Favorites
 let favorites = [];
@@ -143,9 +145,9 @@ function initMap() {
         style: {
             version: 8,
             sources: {
-                'germany': {
+                [BASEMAP]: {
                     type: 'vector',
-                    tiles: [window.location.origin + '/tiles/germany/{z}/{x}/{y}'],
+                    tiles: [window.location.origin + '/tiles/' + BASEMAP + '/{z}/{x}/{y}'],
                     minzoom: 0,
                     maxzoom: 14
                 },
@@ -177,15 +179,15 @@ function initMap() {
             },
             layers: [
                 { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
-                { id: 'water', type: 'fill', source: 'germany', 'source-layer': 'water', paint: { 'fill-color': '#80b0d0' } },
-                { id: 'waterway', type: 'line', source: 'germany', 'source-layer': 'waterway', paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
-                { id: 'landcover', type: 'fill', source: 'germany', 'source-layer': 'landcover', paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
-                { id: 'park', type: 'fill', source: 'germany', 'source-layer': 'park', paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 } },
-                { id: 'landuse', type: 'fill', source: 'germany', 'source-layer': 'landuse', paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 } },
-                { id: 'building', type: 'fill', source: 'germany', 'source-layer': 'building', minzoom: 13, paint: { 'fill-color': '#d0d0d0' } },
-                { id: 'roads', type: 'line', source: 'germany', 'source-layer': 'transportation', paint: { 'line-color': '#ffffff', 'line-width': 1 } },
-                { id: 'roads-major', type: 'line', source: 'germany', 'source-layer': 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
-                { id: 'boundary', type: 'line', source: 'germany', 'source-layer': 'boundary', paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
+                { id: 'water', type: 'fill', source: BASEMAP, 'source-layer': 'water', paint: { 'fill-color': '#80b0d0' } },
+                { id: 'waterway', type: 'line', source: BASEMAP, 'source-layer': 'waterway', paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
+                { id: 'landcover', type: 'fill', source: BASEMAP, 'source-layer': 'landcover', paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
+                { id: 'park', type: 'fill', source: BASEMAP, 'source-layer': 'park', paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 } },
+                { id: 'landuse', type: 'fill', source: BASEMAP, 'source-layer': 'landuse', paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 } },
+                { id: 'building', type: 'fill', source: BASEMAP, 'source-layer': 'building', minzoom: 13, paint: { 'fill-color': '#d0d0d0' } },
+                { id: 'roads', type: 'line', source: BASEMAP, 'source-layer': 'transportation', paint: { 'line-color': '#ffffff', 'line-width': 1 } },
+                { id: 'roads-major', type: 'line', source: BASEMAP, 'source-layer': 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
+                { id: 'boundary', type: 'line', source: BASEMAP, 'source-layer': 'boundary', paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
                 // Route shadow (white outline)
                 { id: 'route-shadow-line', type: 'line', source: 'route-shadow', paint: { 'line-color': 'white', 'line-width': 8, 'line-opacity': 0.4 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
                 // Completed segments (faded)
@@ -228,7 +230,7 @@ function initMap() {
             map.addLayer({
                 id: 'place-city',
                 type: 'symbol',
-                source: 'germany',
+                source: BASEMAP,
                 'source-layer': 'place',
                 filter: ['==', ['get', 'class'], 'city'],
                 minzoom: 5,
@@ -248,7 +250,7 @@ function initMap() {
             map.addLayer({
                 id: 'place-town',
                 type: 'symbol',
-                source: 'germany',
+                source: BASEMAP,
                 'source-layer': 'place',
                 filter: ['==', ['get', 'class'], 'town'],
                 minzoom: 8,
@@ -268,7 +270,7 @@ function initMap() {
             map.addLayer({
                 id: 'place-village',
                 type: 'symbol',
-                source: 'germany',
+                source: BASEMAP,
                 'source-layer': 'place',
                 filter: ['==', ['get', 'class'], 'village'],
                 minzoom: 11,
@@ -288,7 +290,7 @@ function initMap() {
             map.addLayer({
                 id: 'waterway-label',
                 type: 'symbol',
-                source: 'germany',
+                source: BASEMAP,
                 'source-layer': 'waterway',
                 filter: ['has', 'name'],
                 layout: {
