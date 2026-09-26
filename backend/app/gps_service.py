@@ -7,6 +7,7 @@ import json
 import time
 from datetime import datetime
 import httpx
+import devmode
 
 # Global GPS state
 gps_data = {
@@ -46,6 +47,37 @@ def set_external_gps(lat, lon, speed=0.0, heading=0.0, accuracy=None):
     _external_gps_last_update = time.time()
 
 
+_mqtt_gps_last_update = 0.0
+_MQTT_GPS_TIMEOUT = 30.0  # seconds without MQTT position → fix lost
+
+
+def set_mqtt_gps(lat, lon, speed=None, heading=None, altitude=None, satellites=None):
+    """Position from an MQTT GPS module (boat/gps/*); used when SignalK is disabled."""
+    global _mqtt_gps_last_update
+    _mqtt_gps_last_update = time.time()
+    gps_data['lat'] = lat
+    gps_data['lon'] = lon
+    if speed is not None:
+        gps_data['speed'] = speed
+    if heading is not None:
+        gps_data['heading'] = heading
+    if altitude is not None:
+        gps_data['altitude'] = altitude
+    if satellites is not None:
+        gps_data['satellites'] = int(satellites)
+    gps_data['fix'] = True
+    gps_data['timestamp'] = datetime.utcnow().isoformat()
+
+
+def _expire_stale_mqtt_fix():
+    """With SignalK disabled the MQTT feed is the only source; drop the fix when it goes quiet."""
+    if devmode.signalk_url() or not _mqtt_gps_last_update or is_external_gps_active():
+        return
+    if gps_data['fix'] and (time.time() - _mqtt_gps_last_update) > _MQTT_GPS_TIMEOUT:
+        gps_data['fix'] = False
+        gps_data['satellites'] = 0
+
+
 def clear_external_gps():
     """
     Disable external GPS override, fall back to SignalK.
@@ -74,8 +106,18 @@ def is_external_gps_active():
         return False
     return (time.time() - _external_gps_last_update) < _EXTERNAL_GPS_TIMEOUT
 
-async def read_gps_from_signalk(signalk_url='http://localhost:3000'):
-    """Read GPS data from SignalK server"""
+async def read_gps_from_signalk(signalk_url=None):
+    """Read GPS data from SignalK server.
+
+    signalk_url defaults to BOATOS_SIGNALK_URL. When that is empty/disabled,
+    polling is skipped entirely and GPS comes from MQTT (boat/gps/*) or
+    POST /api/gps/external only.
+    """
+    if signalk_url is None:
+        signalk_url = devmode.signalk_url()
+    if not signalk_url:
+        print("📡 SignalK disabled (BOATOS_SIGNALK_URL empty) — GPS via MQTT / /api/gps/external only")
+        return
     print(f"📡 Starting GPS reader from SignalK at {signalk_url}")
 
     error_count = 0
@@ -163,6 +205,7 @@ async def broadcast_gps_data():
     if not websocket_clients:
         return
 
+    _expire_stale_mqtt_fix()
     data = {
         'type': 'gps_update',
         'data': {
@@ -216,6 +259,7 @@ async def broadcast_route():
 
 def get_gps_status():
     """Get current GPS status"""
+    _expire_stale_mqtt_fix()
     return {
         'fix': gps_data['fix'],
         'satellites': gps_data['satellites'],

@@ -419,6 +419,17 @@ Full documentation: `http://<pi-ip>:8000/docs`
 
 ## 🛠️ Development
 
+### Local dev mode (no Raspberry Pi)
+
+```bash
+tools/dev_run.sh --all     # venv + Mosquitto :1883 + backend & UI on :8000 + fake sensors/GPS
+```
+
+Sets `BOATOS_DEV_MODE=1`, which turns all Pi/systemd-only commands into logged
+no-ops and disables SignalK polling (`BOATOS_SIGNALK_URL=`); GPS comes from MQTT
+`boat/gps/*` or `POST /api/gps/external`. Unset, production behaviour is
+unchanged. Details: [docs/development.md](docs/development.md).
+
 ### Backend (on Pi or locally)
 
 ```bash
