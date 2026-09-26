@@ -23,14 +23,18 @@
 
         log('Starting map...');
 
+        // Basemap region: ?region=<id> (default germany) — must match an installed MBTiles
+        const BASEMAP = new URLSearchParams(window.location.search).get('region') || 'germany';
+        log('Basemap: ' + BASEMAP);
+
         const map = new maplibregl.Map({
             container: 'map',
             style: {
                 version: 8,
                 sources: {
-                    'germany': {
+                    [BASEMAP]: {
                         type: 'vector',
-                        tiles: [window.location.origin + '/tiles/germany/{z}/{x}/{y}'],
+                        tiles: [window.location.origin + '/tiles/' + BASEMAP + '/{z}/{x}/{y}'],
                         minzoom: 0,
                         maxzoom: 14
                     }
@@ -44,42 +48,42 @@
                     {
                         id: 'water',
                         type: 'fill',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'water',
                         paint: { 'fill-color': '#80b0d0' }
                     },
                     {
                         id: 'waterway',
                         type: 'line',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'waterway',
                         paint: { 'line-color': '#80b0d0', 'line-width': 2 }
                     },
                     {
                         id: 'landcover',
                         type: 'fill',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'landcover',
                         paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 }
                     },
                     {
                         id: 'park',
                         type: 'fill',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'park',
                         paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 }
                     },
                     {
                         id: 'landuse',
                         type: 'fill',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'landuse',
                         paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 }
                     },
                     {
                         id: 'building',
                         type: 'fill',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'building',
                         minzoom: 13,
                         paint: { 'fill-color': '#d0d0d0' }
@@ -87,14 +91,14 @@
                     {
                         id: 'roads',
                         type: 'line',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'transportation',
                         paint: { 'line-color': '#ffffff', 'line-width': 1 }
                     },
                     {
                         id: 'roads-major',
                         type: 'line',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'transportation',
                         filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]],
                         paint: { 'line-color': '#ffcc80', 'line-width': 3 }
@@ -102,7 +106,7 @@
                     {
                         id: 'boundary',
                         type: 'line',
-                        source: 'germany',
+                        source: BASEMAP,
                         'source-layer': 'boundary',
                         paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] }
                     }
@@ -118,7 +122,7 @@
             if (e.isSourceLoaded) log('📦 Source loaded: ' + e.sourceId);
         });
         map.on('data', (e) => {
-            if (e.dataType === 'source' && e.sourceId === 'germany') {
+            if (e.dataType === 'source' && e.sourceId === BASEMAP) {
                 log('🗺️ Tile data received');
             }
         });

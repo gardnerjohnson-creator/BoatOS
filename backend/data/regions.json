@@ -1,0 +1,75 @@
+{
+  "_comment": "BoatOS region registry. 'regions' lists Geofabrik extracts (id = file stem used for OSRM graphs and MBTiles). 'profiles' hold locale defaults that settings.region.profile selects; any key can be overridden in data/settings.json under 'region'. Add local entries in data/regions.local.json (same shape, merged on top).",
+  "profiles": {
+    "de": {
+      "name": "Germany / Central Europe",
+      "language": "de",
+      "units": "metric",
+      "defaultBasemap": "germany",
+      "defaultCenter": { "lat": 51.855, "lon": 12.046 },
+      "defaultZoom": 13,
+      "tideProvider": "pegelonline",
+      "weatherProvider": "openweather",
+      "alertProvider": "dwd",
+      "chartSource": "elwis"
+    },
+    "us-east": {
+      "name": "US East Coast",
+      "language": "en",
+      "units": "imperial",
+      "defaultBasemap": "us-south",
+      "defaultCenter": { "lat": 26.12, "lon": -80.10 },
+      "defaultZoom": 12,
+      "tideProvider": "noaa-coops",
+      "weatherProvider": "nws",
+      "alertProvider": "nws",
+      "chartSource": "noaa-enc"
+    },
+    "bahamas": {
+      "name": "Bahamas",
+      "language": "en",
+      "units": "imperial",
+      "defaultBasemap": "bahamas",
+      "defaultCenter": { "lat": 25.08, "lon": -77.34 },
+      "defaultZoom": 12,
+      "tideProvider": "noaa-coops",
+      "weatherProvider": "nws",
+      "alertProvider": "nws",
+      "chartSource": "osm"
+    }
+  },
+  "regions": [
+    { "id": "baden-wuerttemberg", "name": "Baden-Württemberg", "geofabrik": "europe/germany/baden-wuerttemberg", "profile": "de" },
+    { "id": "bayern", "name": "Bayern", "geofabrik": "europe/germany/bayern", "profile": "de" },
+    { "id": "berlin", "name": "Berlin", "geofabrik": "europe/germany/berlin", "profile": "de" },
+    { "id": "brandenburg", "name": "Brandenburg", "geofabrik": "europe/germany/brandenburg", "profile": "de" },
+    { "id": "bremen", "name": "Bremen", "geofabrik": "europe/germany/bremen", "profile": "de" },
+    { "id": "hamburg", "name": "Hamburg", "geofabrik": "europe/germany/hamburg", "profile": "de" },
+    { "id": "hessen", "name": "Hessen", "geofabrik": "europe/germany/hessen", "profile": "de" },
+    { "id": "mecklenburg-vorpommern", "name": "Mecklenburg-Vorpommern", "geofabrik": "europe/germany/mecklenburg-vorpommern", "profile": "de" },
+    { "id": "niedersachsen", "name": "Niedersachsen", "geofabrik": "europe/germany/niedersachsen", "profile": "de" },
+    { "id": "nordrhein-westfalen", "name": "Nordrhein-Westfalen", "geofabrik": "europe/germany/nordrhein-westfalen", "profile": "de" },
+    { "id": "rheinland-pfalz", "name": "Rheinland-Pfalz", "geofabrik": "europe/germany/rheinland-pfalz", "profile": "de" },
+    { "id": "saarland", "name": "Saarland", "geofabrik": "europe/germany/saarland", "profile": "de" },
+    { "id": "sachsen", "name": "Sachsen", "geofabrik": "europe/germany/sachsen", "profile": "de" },
+    { "id": "sachsen-anhalt", "name": "Sachsen-Anhalt", "geofabrik": "europe/germany/sachsen-anhalt", "profile": "de" },
+    { "id": "schleswig-holstein", "name": "Schleswig-Holstein", "geofabrik": "europe/germany/schleswig-holstein", "profile": "de" },
+    { "id": "thueringen", "name": "Thüringen", "geofabrik": "europe/germany/thueringen", "profile": "de" },
+    { "id": "germany", "name": "Deutschland (komplett)", "geofabrik": "europe/germany", "profile": "de" },
+    { "id": "germany-waterways", "name": "Deutschland (Wasserstraßen)", "geofabrik": "europe/germany", "profile": "de", "derived": true },
+    { "id": "elbe", "name": "Elbe (Sachsen-Anhalt + Brandenburg + Sachsen)", "geofabrik": null, "profile": "de", "derived": true },
+    { "id": "netherlands", "name": "Nederland", "geofabrik": "europe/netherlands", "profile": "de" },
+
+    { "id": "us-northeast", "name": "US Northeast", "geofabrik": "north-america/us-northeast", "profile": "us-east" },
+    { "id": "us-south", "name": "US South", "geofabrik": "north-america/us-south", "profile": "us-east" },
+    { "id": "us-new-york", "name": "New York", "geofabrik": "north-america/us/new-york", "profile": "us-east" },
+    { "id": "us-new-jersey", "name": "New Jersey", "geofabrik": "north-america/us/new-jersey", "profile": "us-east" },
+    { "id": "us-maryland", "name": "Maryland", "geofabrik": "north-america/us/maryland", "profile": "us-east" },
+    { "id": "us-virginia", "name": "Virginia", "geofabrik": "north-america/us/virginia", "profile": "us-east" },
+    { "id": "us-north-carolina", "name": "North Carolina", "geofabrik": "north-america/us/north-carolina", "profile": "us-east" },
+    { "id": "us-south-carolina", "name": "South Carolina", "geofabrik": "north-america/us/south-carolina", "profile": "us-east" },
+    { "id": "us-georgia", "name": "Georgia", "geofabrik": "north-america/us/georgia", "profile": "us-east" },
+    { "id": "us-florida", "name": "Florida", "geofabrik": "north-america/us/florida", "profile": "us-east" },
+    { "id": "bahamas", "name": "Bahamas", "geofabrik": "central-america/bahamas", "profile": "bahamas" }
+  ]
+}

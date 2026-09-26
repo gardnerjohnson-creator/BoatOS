@@ -437,6 +437,9 @@ const translations = {
         boat_consumption_label: "Verbrauch (L/h)",
         boat_speed_label: "Reisegeschw. (km/h)",
         // Map tab
+        settings_region_profile: "Region & Fahrtgebiet",
+        settings_region_profile_desc: "Legt Standard-Position, Basiskarte, Einheiten und Datenanbieter (Pegel, Wetter, Karten) fest.",
+        settings_region_profile_label: "Profil",
         settings_map_layers: "Kartenlayer",
         settings_show_ienc: "Amtliche Karten (IENC)",
         settings_show_locks: "Schleusen anzeigen",
@@ -1032,6 +1035,9 @@ const translations = {
         boat_consumption_label: "Consumption (L/h)",
         boat_speed_label: "Cruise Speed (km/h)",
         // Map tab
+        settings_region_profile: "Region & Cruising Area",
+        settings_region_profile_desc: "Sets default position, basemap, units and data providers (tides, weather, charts).",
+        settings_region_profile_label: "Profile",
         settings_map_layers: "Map Layers",
         settings_show_ienc: "Official charts (IENC)",
         settings_show_locks: "Show Locks",

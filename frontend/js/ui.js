@@ -1297,10 +1297,51 @@ const _REGION_NAMES = {
     thuringia:             { de: 'Thüringen',            en: 'Thuringia' },
 };
 
-function _regionDisplayName(id) {
+function _regionDisplayName(id, backendName) {
     const entry = _REGION_NAMES[id];
     if (entry) return entry[getLang()] || entry.de;
+    if (backendName) return backendName;
     return id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ---- Region profile (backend/data/regions.json → /api/region) ----
+export async function loadRegionProfile() {
+    const sel = document.getElementById('region-profile-select');
+    if (!sel) return;
+    try {
+        const [reg, cur] = await Promise.all([
+            fetch('/api/regions', { cache: 'no-store' }).then(r => r.json()),
+            fetch('/api/region', { cache: 'no-store' }).then(r => r.json())
+        ]);
+        sel.innerHTML = Object.entries(reg.profiles || {}).map(([pid, p]) =>
+            `<option value="${pid}"${pid === cur.profile ? ' selected' : ''}>${p.name || pid}</option>`
+        ).join('');
+        _renderRegionSummary(cur);
+    } catch (err) {
+        console.error('[BoatOS] loadRegionProfile error:', err);
+    }
+}
+
+function _renderRegionSummary(cur) {
+    const el = document.getElementById('region-profile-summary');
+    if (!el || !cur) return;
+    el.textContent = `${cur.units} · ${cur.defaultBasemap} · ${cur.tideProvider} / ${cur.weatherProvider}`;
+}
+
+export async function setRegionProfile(profile) {
+    try {
+        const cur = await fetch('/api/region', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile })
+        }).then(r => r.json());
+        _renderRegionSummary(cur);
+        window.BOATOS_REGION = cur;
+        await loadMapRegions();
+        document.dispatchEvent(new CustomEvent('regionProfileChanged', { detail: cur }));
+    } catch (err) {
+        console.error('[BoatOS] setRegionProfile error:', err);
+    }
 }
 
 let _mapRegions = { installed: [], active: [] };
@@ -1340,7 +1381,7 @@ function _renderMapRegions(container) {
         return `
         <div class="setting-item" style="margin-bottom:6px;">
             <div>
-                <span style="font-size:13px;">${_regionDisplayName(r.id)}</span>
+                <span style="font-size:13px;">${_regionDisplayName(r.id, r.name)}</span>
                 <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${r.size_mb} MB</span>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -2104,6 +2145,7 @@ window.toggleLocks = toggleLocks;
 window.togglePegel = togglePegel;
 window.initLayerVisibility = initLayerVisibility;
 window.loadMapRegions = loadMapRegions;
+window.loadRegionProfile = loadRegionProfile;
 window.deleteMapRegion = deleteMapRegion;
 window.toggleMapRegion = toggleMapRegion;
 window.onMbtilesFileSelected = onMbtilesFileSelected;
