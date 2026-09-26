@@ -136,7 +136,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # ==================== REST API ====================
 @app.get("/")
-async def root():
+async def root(request: Request):
+    if devmode.is_dev_mode() and "text/html" in request.headers.get("accept", ""):
+        index = _BASE_DIR / "frontend" / "index.html"
+        if index.is_file():
+            return FileResponse(str(index))
     return {"name": "BoatOS", "version": "1.0.0", "status": "running", "timestamp": datetime.now().isoformat()}
 
 @app.get("/api/sensors")
